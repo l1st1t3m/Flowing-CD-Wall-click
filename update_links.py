@@ -4,7 +4,7 @@ import json
 songs_dir = 'songs'
 html_path = os.path.join('html', 'index.html')
 
-# 1. 扫描歌曲并提取真实链接
+# 1. 提取歌曲链接
 cover_to_link = {}
 print(f"正在扫描 '{songs_dir}' 文件夹下的歌曲信息...")
 if os.path.exists(songs_dir):
@@ -19,7 +19,6 @@ if os.path.exists(songs_dir):
                         song_id = data['song_id']
                         song_name = data.get('song_name', '未知歌曲')
                         artist = data.get('artist', '未知歌手')
-                        
                         cover_to_link[cover_filename] = {
                             "url": f"https://music.163.com/#/song?id={song_id}",
                             "title": f"🎵 播放: {song_name} - {artist}"
@@ -27,56 +26,69 @@ if os.path.exists(songs_dir):
             except Exception as e:
                 pass
 
-# 2. 修改 html/index.html
 if not os.path.exists(html_path):
     print(f"❌ 错误：未找到网页文件 '{html_path}'！")
 else:
     with open(html_path, 'r', encoding='utf-8') as f:
         html_content = f.read()
 
-    # 3. 替换被还原或未修改的原始链接
+    # 2. 批量替换：同时给 img 加上 decoding="async" 和 loading="lazy"（性能暴增的核心）
     count = 0
     for cover_filename, info in cover_to_link.items():
         old_tag = f'<a href="covers/{cover_filename}">'
         new_tag = f'<a href="{info["url"]}" target="_blank" title="{info["title"]}">'
+        
+        # 替换 A 标签
         if old_tag in html_content:
             html_content = html_content.replace(old_tag, new_tag)
             count += 1
+            
+    # 全局替换 img 标签，加入异步解码和原生占位，释放 CPU 压力
+    html_content = html_content.replace('<img alt="unknown"', '<img alt="unknown" decoding="async" loading="lazy"')
 
-    # 4. 💎 核心魔法：注入破除鼠标限制的 CSS 和超酷悬浮特效
+    # 3. 注入【显卡硬件加速版】的超强 CSS
     css_magic = """
-<!-- 破解壁纸模式屏蔽的点击事件，并添加悬浮放大特效 -->
+<!-- 性能优化与交互特效 -->
 <style>
-  /* 强制恢复所有的鼠标互动 */
-  body, .scroll, .img-box, a, img {
-      pointer-events: auto !important;
-  }
-  
-  /* 给每个可点击的专辑添加过渡动画 */
+  /* 恢复交互，但限定在图片容器上以节省性能 */
   .img-box a {
+      pointer-events: auto !important;
       display: inline-block;
-      transition: all 0.3s ease !important;
+      
+      /* 优化1：绝对不使用 all，只针对需要变化的属性做动画，减少重绘 */
+      transition: transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94), filter 0.25s ease, box-shadow 0.25s ease !important;
+      
+      /* 优化2：开启 GPU 硬件加速 (开启独立合成层) */
+      will-change: transform;
+      -webkit-backface-visibility: hidden;
+      backface-visibility: hidden;
+      transform: translateZ(0); 
   }
   
-  /* 鼠标悬浮时的爆炸特效：稍微放大、置于顶层、加厚重阴影、稍微提亮 */
   .img-box a:hover {
-      transform: scale(1.15) !important;
+      /* 悬浮时依然保持硬件加速 */
+      transform: scale(1.15) translateZ(0) !important;
       z-index: 999 !important;
       position: relative;
-      box-shadow: 0 15px 25px rgba(0,0,0,0.8);
-      filter: brightness(1.1);
+      box-shadow: 0 20px 30px rgba(0,0,0,0.6);
+      filter: brightness(1.15);
+  }
+
+  /* 优化3：解决初始加载白屏时的排版塌陷问题 */
+  .img-box img {
+      background-color: #2a2a2a; /* 骨架屏深灰占位 */
+      min-width: 160px;
+      min-height: 160px;
+      object-fit: cover;
   }
 </style>
 </head>
 """
-    # 确保没有重复注入
-    if "破解壁纸模式" not in html_content:
+    if "性能优化与交互特效" not in html_content:
         html_content = html_content.replace('</head>', css_magic)
-        print("✅ 成功注入：解除鼠标屏蔽 + 悬浮放大特效 CSS！")
 
-    # 5. 写回文件
+    # 4. 写回文件
     with open(html_path, 'w', encoding='utf-8') as f:
         f.write(html_content)
 
-    print(f"🎉 运行完成！如果有新增或被还原的链接，已更新 {count} 个。（如果为0说明链接上次已替换完，重点是注入特效已生效）")
-    print("👉 赶紧双击打开你的 html/index.html 测试一下鼠标悬浮的爽快感吧！")
+    print(f"🎉 成功优化并替换了 {count} 首歌曲。现在页面应该如丝般顺滑！")
