@@ -38,49 +38,42 @@ else:
         old_tag = f'<a href="covers/{cover_filename}">'
         new_tag = f'<a href="{info["url"]}" target="_blank" title="{info["title"]}">'
         
-        # 替换 A 标签
         if old_tag in html_content:
             html_content = html_content.replace(old_tag, new_tag)
             count += 1
             
-    # 全局替换 img 标签，加入异步解码和原生占位
     html_content = html_content.replace('<img alt="unknown"', '<img alt="unknown" decoding="async" loading="lazy"')
 
-    # 3. 注入【终极破壁版】的超强 CSS
+    # 3. 注入【终极破壁版 + 悬停不暂停】的超强 CSS
     css_magic = """
 <!-- 性能优化与交互特效 -->
 <style>
   /* --- 终极核心修复：粉碎所有遮挡与边界裁切 --- */
-  
-  /* 基础状态：强制允许图片突破上下边界 */
   .img-box, .img-box div {
       position: relative !important;
       z-index: 1 !important;
-      overflow: visible !important; /* ★ 极其重要：解除原CSS可能存在的裁切 */
+      overflow: visible !important;
   }
 
-  /* 第1级：只要这排有海报被鼠标悬停，整排立刻置顶防上下遮挡 */
-  .img-box:hover,
-  .img-box:has(a:hover) {
-      z-index: 999 !important;
+  /* ★ 强制覆盖原生 CSS：无论鼠标怎么放，绝对不允许暂停原生动画！ */
+  .img-box:hover, 
+  .img-box:hover div,
+  .img-box:hover a {
+      animation-play-state: running !important;
   }
-  
-  /* 第2级：所在的滚动半场置顶，防前后遮挡 */
-  .img-box div:hover,
-  .img-box div:has(a:hover) {
-      z-index: 9999 !important;
-  }
-  /* ----------------------------------------------------------- */
+
+  .img-box:hover, .img-box:has(a:hover) { z-index: 999 !important; }
+  .img-box div:hover, .img-box div:has(a:hover) { z-index: 9999 !important; }
+
+  /* 拖拽时全局鼠标指针变化 */
+  .img-box { cursor: grab; }
+  body.is-grabbing, body.is-grabbing * { cursor: grabbing !important; }
 
   /* 恢复交互，限定在图片容器上以节省性能 */
   .img-box a {
       pointer-events: auto !important;
       display: inline-block;
-      
-      /* 优化1：绝对不使用 all，只针对变化属性做动画 */
       transition: transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94), filter 0.25s ease, box-shadow 0.25s ease !important;
-      
-      /* 优化2：开启 GPU 硬件加速 */
       will-change: transform;
       -webkit-backface-visibility: hidden;
       backface-visibility: hidden;
@@ -88,20 +81,16 @@ else:
   }
   
   .img-box a:hover {
-      /* 悬浮时放大 */
       transform: scale(1.15) translateZ(0) !important;
-      
-      /* 第3级：当前图片自身拥有最高优先级，防左右遮挡 */
       z-index: 99999 !important;
       position: relative !important;
-      
       box-shadow: 0 20px 30px rgba(0,0,0,0.6) !important;
       filter: brightness(1.15) !important;
   }
 
-  /* 优化3：解决初始加载白屏时的排版塌陷问题 */
+  /* 骨架屏深灰占位 */
   .img-box img {
-      background-color: #2a2a2a; /* 骨架屏深灰占位 */
+      background-color: #2a2a2a; 
       min-width: 160px;
       min-height: 160px;
       object-fit: cover;
@@ -112,8 +101,118 @@ else:
     if "性能优化与交互特效" not in html_content:
         html_content = html_content.replace('</head>', css_magic)
 
-    # 4. 写回文件
+    # 4. 注入【不停流淌版 滚轮/拖拽 JS】
+    js_magic = """
+<!-- 全局联动拖拽与滚轮互交脚本 (自然流淌版) -->
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const allAnimElements = document.querySelectorAll('.img-box, .img-box div');
+    
+    let isDown = false;
+    let isDragging = false;
+    let isVertical = null;
+    let startX = 0, startY = 0, lastX = 0;
+    
+    const pauseAll = () => {
+        allAnimElements.forEach(el => el.getAnimations().forEach(anim => anim.pause()));
+    };
+    
+    const playAll = () => {
+        allAnimElements.forEach(el => el.getAnimations().forEach(anim => anim.play()));
+    };
+    
+    // 核心黑科技：直接拨动运行中的动画时间线，实现“快进/倒退”
+    const scrub = (delta) => {
+        allAnimElements.forEach(el => {
+            el.getAnimations().forEach(anim => {
+                anim.currentTime += delta * 15; 
+            });
+        });
+    };
+
+    const start = (e) => {
+        if (!e.target.closest('.img-box')) return;
+        
+        isDown = true;
+        isDragging = false;
+        isVertical = null;
+        startX = e.type.includes('mouse') ? e.pageX : e.touches[0].pageX;
+        startY = e.type.includes('mouse') ? e.pageY : e.touches[0].pageY;
+        lastX = startX;
+        
+        document.body.classList.add('is-grabbing');
+        pauseAll(); // 仅在按住鼠标拖拽时暂停（为了不跟手起冲突）
+    };
+
+    const move = (e) => {
+        if (!isDown) return;
+        
+        const currentX = e.type.includes('mouse') ? e.pageX : e.touches[0].pageX;
+        const currentY = e.type.includes('mouse') ? e.pageY : e.touches[0].pageY;
+        
+        if (isVertical === null) {
+            if (Math.abs(currentY - startY) > Math.abs(currentX - startX) + 5) {
+                isVertical = true; 
+            } else if (Math.abs(currentX - startX) > 5) {
+                isVertical = false; 
+                isDragging = true;
+            }
+        }
+        
+        if (isVertical === true) return; 
+        
+        if (isVertical === false && e.cancelable) {
+            e.preventDefault(); 
+        }
+        
+        const deltaX = lastX - currentX;
+        lastX = currentX;
+        scrub(deltaX * 2.5); 
+    };
+
+    const end = () => {
+        if (!isDown) return;
+        isDown = false;
+        document.body.classList.remove('is-grabbing');
+        playAll(); // 鼠标一松开，立刻恢复自然滚动！
+    };
+
+    window.addEventListener('mousedown', start);
+    window.addEventListener('mousemove', move, { passive: false });
+    window.addEventListener('mouseup', end);
+    
+    window.addEventListener('touchstart', start, { passive: true });
+    window.addEventListener('touchmove', move, { passive: false });
+    window.addEventListener('touchend', end);
+    
+    // ★ 滚轮与触控板逻辑：不需要暂停，直接叠加时间线
+    window.addEventListener('wheel', (e) => {
+        if (Math.abs(e.deltaY) > Math.abs(e.deltaX) + 10 && e.deltaX === 0) return;
+        if (e.cancelable) e.preventDefault();
+        
+        const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+        scrub(delta * 4); // 画面依然在自动播放，这里只是额外叠加了一股力推着它走
+    }, { passive: false });
+
+    // 防误触：拖拽结束后阻断链接跳转
+    window.addEventListener('click', (e) => {
+        if (isDragging && e.target.closest('a')) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }, { capture: true });
+    
+    // ★ 已经彻底删除了原版代码中鼠标悬停 (mouseenter) 带来的暂停效果！
+});
+</script>
+</body>
+"""
+    if "全局联动拖拽与滚轮互交脚本" not in html_content:
+        html_content = html_content.replace('</body>', js_magic)
+
+
+    # 5. 写回文件
     with open(html_path, 'w', encoding='utf-8') as f:
         f.write(html_content)
 
-    print(f"🎉 成功优化并替换了 {count} 首歌曲。上下左右全方位防遮挡已生效！")
+    print(f"🎉 交互升级成功！")
