@@ -32,7 +32,7 @@ else:
     with open(html_path, 'r', encoding='utf-8') as f:
         html_content = f.read()
 
-    # 2. 批量替换：同时给 img 加上 decoding="async" 和 loading="lazy"（性能暴增的核心）
+    # 2. 批量替换：同时给 img 加上 decoding="async" 和 loading="lazy"
     count = 0
     for cover_filename, info in cover_to_link.items():
         old_tag = f'<a href="covers/{cover_filename}">'
@@ -43,22 +43,44 @@ else:
             html_content = html_content.replace(old_tag, new_tag)
             count += 1
             
-    # 全局替换 img 标签，加入异步解码和原生占位，释放 CPU 压力
+    # 全局替换 img 标签，加入异步解码和原生占位
     html_content = html_content.replace('<img alt="unknown"', '<img alt="unknown" decoding="async" loading="lazy"')
 
-    # 3. 注入【显卡硬件加速版】的超强 CSS
+    # 3. 注入【终极破壁版】的超强 CSS
     css_magic = """
 <!-- 性能优化与交互特效 -->
 <style>
-  /* 恢复交互，但限定在图片容器上以节省性能 */
+  /* --- 终极核心修复：粉碎所有遮挡与边界裁切 --- */
+  
+  /* 基础状态：强制允许图片突破上下边界 */
+  .img-box, .img-box div {
+      position: relative !important;
+      z-index: 1 !important;
+      overflow: visible !important; /* ★ 极其重要：解除原CSS可能存在的裁切 */
+  }
+
+  /* 第1级：只要这排有海报被鼠标悬停，整排立刻置顶防上下遮挡 */
+  .img-box:hover,
+  .img-box:has(a:hover) {
+      z-index: 999 !important;
+  }
+  
+  /* 第2级：所在的滚动半场置顶，防前后遮挡 */
+  .img-box div:hover,
+  .img-box div:has(a:hover) {
+      z-index: 9999 !important;
+  }
+  /* ----------------------------------------------------------- */
+
+  /* 恢复交互，限定在图片容器上以节省性能 */
   .img-box a {
       pointer-events: auto !important;
       display: inline-block;
       
-      /* 优化1：绝对不使用 all，只针对需要变化的属性做动画，减少重绘 */
+      /* 优化1：绝对不使用 all，只针对变化属性做动画 */
       transition: transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94), filter 0.25s ease, box-shadow 0.25s ease !important;
       
-      /* 优化2：开启 GPU 硬件加速 (开启独立合成层) */
+      /* 优化2：开启 GPU 硬件加速 */
       will-change: transform;
       -webkit-backface-visibility: hidden;
       backface-visibility: hidden;
@@ -66,12 +88,15 @@ else:
   }
   
   .img-box a:hover {
-      /* 悬浮时依然保持硬件加速 */
+      /* 悬浮时放大 */
       transform: scale(1.15) translateZ(0) !important;
-      z-index: 999 !important;
-      position: relative;
-      box-shadow: 0 20px 30px rgba(0,0,0,0.6);
-      filter: brightness(1.15);
+      
+      /* 第3级：当前图片自身拥有最高优先级，防左右遮挡 */
+      z-index: 99999 !important;
+      position: relative !important;
+      
+      box-shadow: 0 20px 30px rgba(0,0,0,0.6) !important;
+      filter: brightness(1.15) !important;
   }
 
   /* 优化3：解决初始加载白屏时的排版塌陷问题 */
@@ -91,4 +116,4 @@ else:
     with open(html_path, 'w', encoding='utf-8') as f:
         f.write(html_content)
 
-    print(f"🎉 成功优化并替换了 {count} 首歌曲。现在页面应该如丝般顺滑！")
+    print(f"🎉 成功优化并替换了 {count} 首歌曲。上下左右全方位防遮挡已生效！")
