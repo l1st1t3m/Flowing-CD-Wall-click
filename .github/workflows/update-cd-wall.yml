@@ -1,0 +1,70 @@
+name: Update CD Wall
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+
+      - name: Download playlist covers
+        run: |
+          python download_netease_music_playlist.py \
+          --playlist_id 17797603555 \
+          --cover_dir covers
+
+      - name: Generate CD wall
+        run: |
+          python generate_cd_wall.py \
+          --cover_dir covers \
+          --output_dir html \
+          --cover_list covers.json
+
+      - name: Update links
+        run: |
+          python update_links.py
+
+      - name: Clone target repo
+        run: |
+          git clone --depth=1 https://x-access-token:${{ secrets.PAT }}@github.com/l1st1t3m/CD-Wall-l1st1t3m.git target
+
+      - name: Sync files
+        run: |
+          rm -rf target/covers
+          rm -rf target/css
+          rm -rf target/js
+
+          cp -r html/covers target/
+          cp -r html/css target/
+          cp -r html/js target/
+          cp html/current.json target/
+          cp html/index.html target/
+
+      - name: Push changes
+        run: |
+          cd target
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+
+          git add covers css js current.json index.html
+          git commit -m "Auto update CD wall" || echo "No changes"
+
+          git push
